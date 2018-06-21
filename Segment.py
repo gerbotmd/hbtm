@@ -7,6 +7,8 @@ Created on Wed Jun 20 11:31:11 2018
 """
 
 import numpy as np
+import copy
+#from collections import deque
 #import pdb
 
 class Segment:
@@ -31,6 +33,60 @@ class Segment:
             self.childlinks.append((child, blcoeff))
         return self # needed to allow construction of more compicated trees
     
+    #################################################################
+    #  Tree Walking functions                                       #
+    #################################################################
+    
+    def _walk_get(self, retriever):
+        """Walks the tree in Pre-order, building a list to return of
+        the values at each tree by running retriever, which takes a 
+        node, and a collecter, appending the value to the collector
+        """
+        collector = []
+        nodeq = [self,]
+        while len(nodeq) != 0:   
+            #print([x.name for x in nodeq])
+            cnode = nodeq.pop()
+            retriever(cnode, collector)
+            if cnode.childlinks is not None:
+                for child, _ in reversed(cnode.childlinks):
+                    nodeq.append(child)
+        return collector
+    
+    def _walk_set(self, setter, valstack):
+        """Walks the tree in Per-order, with a setter poping from a reveresed
+        valstack to set the tree. setter should be a function that takes a
+        node and a valstack. In the setter, some value should be poped from
+        valstack and then, the nodes member value should be set to that
+        
+        This method prints an error and
+        returns early if valstack is the wrong size
+        """
+        if len(valstack) != self._get_size():
+            print("ERROR: Wrong Sized Set!") # perhaps should throw an error
+            return 
+        # setup the stack of values in the right order
+        valstack.reverse()
+        nodeq = [self,]
+        while len(nodeq) != 0:
+            cnode = nodeq.pop()
+            setter(cnode, valstack)
+            if cnode.childlinks is not None:
+                for child, _ in reversed(cnode.childlinks):
+                    nodeq.append(child)
+        
+    def _get_size(self):
+        """Recursively walk the tree in depth first computing
+        the size
+        """
+        if self.childlinks is None:
+            return 1
+        else:
+            size = 1
+            for child, bcf in self.childlinks:
+                size += child._get_size()
+            return size
+        
     #################################################################
     # Coefficent Functions                                          #
     #################################################################
@@ -64,93 +120,47 @@ class Segment:
     def get_const(self, dt, tinf):
         """Get the constants terms for the system
         """
-        cvec = np.zeros(self._get_size())
-        cid = -1 #start before
-        cvec, _ = self._get_const(cvec, cid, dt, tinf)
-        return cvec
-    
-    def _get_const(self, cvec, cid, dt, tinf):
-        """compute the constants
-        """
-        cid += 1
-        cvec[cid] = self.qmet + (self.store * self.temp / dt) + (self.env * tinf)
-        if self.childlinks is not None:
-            for child, _ in self.childlinks:
-                cvec, cid = child._get_const(cvec, cid, dt, tinf)
-        return cvec, cid
+        cvec = self._walk_get(
+                lambda n, c: c.append(n.qmet + (n.store * n.temp / dt) + (n.env * tinf) 
+                ))
+        return np.asarray(cvec)
     
     #################################################################
     # TEMPERATURE FUNCTIONS                                         #
     #################################################################
     def get_temps(self):
-        """get temperatures
+        """get temperatures, returns numpy array
         """
-        temps = np.zeros(self._get_size())
-        cid = -1
-        temps, _ = self._get_temps(temps, cid)
-        return temps
-    
-    def _get_temps(self, temps, cid):
-        """internal
-        """
-        cid += 1
-        temps[cid] = self.temp
-        if self.childlinks is not None:
-            for child, _ in self.childlinks:
-                temps, cid = child._get_temps(temps, cid)
-        return temps, cid
+        temps = self._walk_get(lambda n, c: c.append(n.temp))
+        return np.asarray(temps)
     
     def set_temps(self, temps):
         """Set the temperatures, from a list
         """
-        temps.reverse()
-        self._set_temps(temps)
+        # setting func
+        def tset(node, stack):
+            node.temp = stack.pop()
         
-    def _set_temps(self, tstack):
-        """Internal
-        """
-        self.temp = tstack.pop()
-        if self.childlinks is not None:
-            for child, _ in self.childlinks:
-                tstack = child._set_temps(tstack)
-        return tstack
-    
+        temps = copy.copy(temps)
+        self._walk_set(tset, temps)
+        
     #################################################################
     # NAMES FUNCTIONS                                               #
     #################################################################
     def get_names(self):
         """get the names of the segments
         """
-        names = []
-        return self._get_names(names)
+        return self._walk_get(lambda n, c: c.append(n.name))
     
-    def _get_names(self, names):
-        """internal
-        """
-        names.append(self.name) 
-        if self.childlinks is not None:
-            for child, _ in self.childlinks:
-                names = child._get_names(names)
-        return names
-            
     def set_names(self, names):
         """given a list of the proper length, set the names
         """
-        # list size guard
-        if len(names) != self._get_size():
-            print("WRONG SIZE NAME LIST!")
-            return 
+        def nset(node, stack):
+            node.name = stack.pop()
         
-        names.reverse()
-        self._set_names(names)
+        names = copy.copy(names)
+        self._walk_set(nset, names)
         
-    def _set_names(self, nstack):
-        self.name = nstack.pop()
-        if self.childlinks is not None:
-            for child, _ in self.childlinks:
-                nstack = child._set_names(nstack)
-        return nstack
-    
     def build_name_matrix(self):
         """Build a Matrix whoes elemnts are strings describing
         the interactions and testing the matrix construction
@@ -180,15 +190,18 @@ class Segment:
         return cid, nmat
                 
         
-    def _get_size(self):
-        """Recursively walk the tree in depth first computing
-        the size
-        """
-        if self.childlinks is None:
-            return 1
-        else:
-            size = 1
-            for child, bcf in self.childlinks:
-                size += child._get_size()
-            return size
-        
+###############################################################################
+#               Testing Functions and Utilities                               #
+###############################################################################
+            
+def _build_testtree():
+    """return a test tree for checking the functionality of various refactors
+    so that I can get the code to run nicely
+    """
+    tree = Segment(1,2,3,"A")
+    tree.add_child(0.1, Segment(4, 5, 6, "B"))
+    tree.add_child(0.2, 
+                   Segment(7, 8, 9, "C").add_child(0.3, 
+                   Segment(10, 11, 12, "D")))
+    tree.add_child(0.5, Segment(13, 15, 16, "E"))
+    return tree
