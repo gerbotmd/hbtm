@@ -12,16 +12,22 @@ import copy
 #import pdb
 
 class Segment:
-    def __init__(self, store, env, qmet, name="Segment", itemp=37.0):
+    def __init__(self, store, envf, qmetf, name="Segment", itemp=37.0):
         """builds a segment, that has children and parents
         """
         self.parent = None # should be a segment object or none
         self.childlinks = None # will end up being a list (segment, bloodcoff) tuples
-        self.store = store
-        self.env = env 
-        self.qmet = qmet
-        self.name = name
+        # Temperature independent params
         self.temp = itemp
+        self.store = store
+        self.name = name
+        # store env and qmet as functions of the old temperature, 
+        # that will be evaluated these functions should take a node 
+        # temperature and return on of the temperature variables
+        self.envf = envf
+        self.qmetf = qmetf
+        # set the initail values 
+        self._eval_temperature()
         
     def add_child(self, blcoeff, child):
         """Add a child to the segment tree
@@ -34,9 +40,31 @@ class Segment:
         return self # needed to allow construction of more compicated trees
     
     #################################################################
+    #       Temperature Evaluation                                  #
+    #################################################################
+    def _eval_temperature(self):
+        """Evaluate the the temperature dependent properties of the node
+        so that they can be used
+        """
+        self.env = self.envf(self.temp)
+        self.qmet = self.qmetf(self.temp)
+    
+    #################################################################
     #  Tree Walking functions                                       #
     #################################################################
     
+    def _walk_touch(self, toucher):
+        """Walks the tree in Pre-order, touching each node with the toucher
+        function, which generaly will call some method on each node
+        """
+        nodeq = [self,]
+        while len(nodeq) != 0:
+            cnode = nodeq.pop()
+            toucher(cnode)
+            if cnode.childlinks is not None:
+                for child, _ in reversed(cnode.childlinks):
+                    nodeq.append(child)
+        
     def _walk_get(self, retriever):
         """Walks the tree in Pre-order, building a list to return of
         the values at each tree by running retriever, which takes a 
@@ -143,6 +171,7 @@ class Segment:
         
         temps = copy.copy(temps)
         self._walk_set(tset, temps)
+        self._walk_touch(lambda n: n._eval_temperature())
         
     #################################################################
     # NAMES FUNCTIONS                                               #
@@ -198,10 +227,11 @@ def _build_testtree():
     """return a test tree for checking the functionality of various refactors
     so that I can get the code to run nicely
     """
-    tree = Segment(1,2,3,"A")
-    tree.add_child(0.1, Segment(4, 5, 6, "B"))
+    tree = Segment(1, lambda x: 2, lambda x: 3,"A")
+    tree.add_child(0.1, Segment(4, lambda x: 5, lambda x: 6, "B"))
     tree.add_child(0.2, 
-                   Segment(7, 8, 9, "C").add_child(0.3, 
-                   Segment(10, 11, 12, "D")))
-    tree.add_child(0.5, Segment(13, 15, 16, "E"))
+                   Segment(7, lambda x: 8, lambda x: 9, "C").add_child(0.3, 
+                   Segment(10, lambda x: 11, lambda x: 12, "D")))
+    tree.add_child(0.5, Segment(13, lambda x: 15, lambda x: 16, "E"))
     return tree
+
