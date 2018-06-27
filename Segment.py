@@ -24,6 +24,7 @@ class Segment:
         self.env = env
         self.qmet = qmet
         self._idx = None # This index of the node
+        self.matf = _matf # default matrix function
         # set the initail values 
         #self._eval_temperature()
         
@@ -46,14 +47,8 @@ class Segment:
         return self # needed to allow construction of more compicated trees
     
     #################################################################
-    #       Temperature Evaluation and Element Access               #
+    #                        Element Access                         #
     #################################################################
-    #def _eval_temperature(self):
-    #    """Evaluate the the temperature dependent properties of the node
-    #    so that they can be used
-    #    """
-    #    self.env = self.envf(self.temp)
-    #    self.qmet = self.qmetf(self.temp)
     
     def __getitem__(self, key):
         """ Allow attribute access by key (so that it is easy to build
@@ -69,7 +64,7 @@ class Segment:
         setattr(self, key, val)
     
     #################################################################
-    #  Tree Walking functions                                       #
+    #                    Tree Walking functions                     #
     #################################################################
     
     def _walk_touch(self, toucher):
@@ -151,10 +146,12 @@ class Segment:
 
 
     #################################################################
-    # Coefficent Functions                                          #
+    #                       Coefficent Functions                    #
     #################################################################
     def coeff_mat(self, dt):
         """Return the coefficent matrix with this segement as parent
+        
+        DEPRICATED
         """
         size = self._get_size()
         cmat = np.zeros((size,size)) # here numpy should work
@@ -164,6 +161,8 @@ class Segment:
         
     def _coeff_mat(self, cid, cmat, dt, pbcf):
         """Internal recursing function
+        
+        DEPRICATED
         """
         cid += 1
         # self term (non, child depened)
@@ -196,6 +195,8 @@ class Segment:
     def build_temp_matrix(self, dt):
         """New Function for building the matrix correctly using the walk
         Matrix function
+        
+        DEPRICATED
         """
         # build the per node function
         def matf(nlnk, matrix):
@@ -216,7 +217,24 @@ class Segment:
         mat = np.zeros((size,size))
         self._walk_matrix(matf, mat)
         return mat 
-        
+    
+    def build_func_matrix(self, dt):
+        """In this case, each of the nodes is going to use its own 
+        function, defined for/stored on the node as the .matf parameter
+        which will point to a funciton. Otherwise this will call a defualt
+        function that has the same properties as the build temp matrix 
+        function above, matf must also take dt
+        """
+        # pass trhough for the matrix function
+        def matf(nlnk, mat):
+            node, _ = nlnk
+            node.matf(nlnk, mat, dt)
+        # call the function
+        size = self._get_size()
+        mat = np.zeros((size,size))
+        self._walk_matrix(matf, mat)
+        return mat
+            
     #################################################################
     #  GET and SET each of the Parameters                           #
     #################################################################
@@ -315,6 +333,10 @@ class Segment:
                 cid, nmat = child._build_name_matrix(cid, nmat)
         return cid, nmat
                 
+    
+###############################################################################
+#                              BODY CLASS                                     #
+###############################################################################
         
 class Body:
     def __init__(self, body_tree=None):
@@ -429,7 +451,7 @@ class Body:
         # And then run the simulation loop 
         for i in range(steps):
             # compute the new temperatures 
-            A = self.body_tree.build_temp_matrix(dt) # temperature A in [[A]][t] = [c]
+            A = self.body_tree.build_func_matrix(dt) # temperature A in [[A]][t] = [c]
             c = self.body_tree.get_const(dt, env_temp) # constant vector
             ntemps = list(np.linalg.inv(A) @ c)
             # update the outputs, body temperature, body params, and matrix params
@@ -445,6 +467,22 @@ class Body:
 ###############################################################################
 #               Testing Functions and Utilities                               #
 ###############################################################################
+
+def _matf(nlnk, mat, dt):
+    """Default matrix function
+    """
+    node, pbcf = nlnk
+    sid = node._idx 
+    # self term
+    mat[sid][sid] = node.store / dt + node.env + pbcf
+    if node.childlinks is not None:
+        for child, lnk in node.childlinks:
+            cid = child._idx
+            # self term addition for children
+            mat[sid][sid] += lnk
+            # cross terms
+            mat[sid][cid] = -lnk
+            mat[cid][sid] = -lnk
     
 class Idxer:
     def __init__(self, sidx):
