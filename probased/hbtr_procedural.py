@@ -244,7 +244,7 @@ def print_temperatures(step, temps):
     print(pstring.format(step, *ntemps))
 
 # now setup the simulatin
-dt = 60 # seconds, i.e. a minute 
+dt = 1 # second
 
 # initial conditions 
 print_temperatures(0, temp)
@@ -269,7 +269,7 @@ controllog = []
 signallog = []
 effectslog = []
 
-for i in range(1000):
+for i in range(120000):
     # signals
     error, cold, warm, clds, wrms = signals(temp, tset, skinr)
     # controls
