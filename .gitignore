@@ -1,0 +1,5 @@
+# my python ignore file
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints
+*~
