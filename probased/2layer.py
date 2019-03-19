@@ -10,11 +10,11 @@ import numpy as np
 import collections 
 from hbtr_pressure import satpress, emax
 
-# build the model as a 2 segment model for now, add arms and legs later
-
 # Geometrics: For the moment I am going to use "Aproximate" measures from myself,
 # and some of the values from stolwijk and tanabe 
-# as [core, head] 
+# as [core, head
+#     upper arm, lower arm, hand, upper arm, lower arm, hand
+#     upper leg, lower leg, foor, upper leg, lower leg, foot] 
 orad = [0.100, 0.210, 
         0.045, 0.035, 0.035, 0.045, 0.035, 0.035,
         0.090, 0.060, 0.050, 0.090, 0.060, 0.050] # outer radius in meters
